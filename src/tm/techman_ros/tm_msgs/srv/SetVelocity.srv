@@ -1,0 +1,10 @@
+#motion_type :  Joint, Tool
+
+int8 Joint = 1
+int8 Tool = 2
+
+int8 motion_type
+float64[] velocity
+---
+# ok :  set motion status 
+bool ok

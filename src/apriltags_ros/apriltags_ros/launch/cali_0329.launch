@@ -1,0 +1,37 @@
+<launch>
+  <node pkg="apriltags_ros" type="apriltag_detector_node" name="apriltag_detector" output="screen">
+    <!-- Remap topic required by the node to custom topics -->
+    <!-- <remap from="image_rect" to="rgb/image_raw" />
+    <remap from="camera_info" to="rgb/camera_info" /> -->
+    <remap from="image_rect" to="my_camera/image_rect_color" />
+    <remap from="camera_info" to="my_camera/camera_info" />
+
+    <!-- Optional: Subscribe to the compressed stream-->
+    <param name="image_transport" type="str" value="compressed" />
+
+    <!-- Select the tag family: 16h5, 25h7, 25h9, 36h9, or 36h11(default) -->
+    <param name="tag_family" type="str" value="36h11" />
+
+    <!-- Enable projected optical measurements for more accurate tag transformations -->
+    <!-- This exists for backwards compatability and should be left true for new setups -->
+    <param name="projected_optics" type="bool" value="true" />
+
+    <!-- Describe the tags -->
+    <rosparam param="tag_descriptions">[
+      {id: 350, size: 0.076, frame_id: tag_350},
+      {id: 30, size: 0.04, frame_id: tag_30},
+      {id: 31, size: 0.04, frame_id: tag_31},
+      {id: 32, size: 0.04, frame_id: tag_32},
+      {id: 33, size: 0.04, frame_id: tag_33},
+      {id: 34, size: 0.04, frame_id: tag_34},
+      {id: 35, size: 0.04, frame_id: tag_35},
+      {id: 36, size: 0.04, frame_id: tag_36},
+      {id: 37, size: 0.04, frame_id: tag_37},
+      {id: 38, size: 0.04, frame_id: tag_38},
+      {id: 39, size: 0.04, frame_id: tag_39},
+      {id: 40, size: 0.04, frame_id: tag_40},
+      {id: 41, size: 0.04, frame_id: tag_41},
+      ]
+    </rosparam>
+  </node>
+</launch>

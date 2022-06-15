@@ -1,0 +1,52 @@
+<launch>
+  <arg name="kinect_name" default="kinectV2_1" />
+  <arg name="image_view" default="true" />
+  <arg name="inverse_tf" default="false" /> <!--inverse_tf will make tag becaome parent frame --> 
+
+  <node pkg="apriltags_ros" type="apriltag_detector_node" name="apriltag_detector_$(arg kinect_name)" output="screen">
+	<!-- <remap from="image_rect" to="/camera/color/image_raw" /> -->
+<!--   <remap from="image_rect" to="/camera/color/image_rect_color" />
+	remap from="camera_info" to="/camera/color/camera_info/calib" /
+  <remap from="camera_info" to="/camera/color/camera_info" /> -->
+
+  <remap from="image_rect" to="/my_camera/image_rect_color" />
+  <remap from="camera_info" to="/my_camera/camera_info" />
+
+  
+
+    <param name="image_transport" type="str" value="raw" />
+    <param name="tag_family" type="str" value="36h11" />
+    <param name="camera_name" value="$(arg kinect_name)" />
+    <param name="projected_optics" type="bool" value="true" />
+    <param name="inverse_tf" type="bool" value="$(arg inverse_tf)" />
+
+    <rosparam param="tag_descriptions">[
+      <!--{id: 0, size: 0.163513 },-->
+      {id: 0, size: 0.12, frame_id: tag0},
+      {id: 1, size: 0.0475, frame_id: tag1},
+      {id: 8, size: 0.06, frame_id: tag8},
+      {id: 9, size: 0.0484, frame_id: tag9},
+      {id: 19, size: 0.069, frame_id: tag19},
+      {id: 20, size: 0.075, frame_id: tag20},
+      {id: 30, size: 0.04, frame_id: tag30},
+      {id: 31, size: 0.04, frame_id: tag31},
+      {id: 32, size: 0.04, frame_id: tag32},
+      {id: 33, size: 0.04, frame_id: tag33},
+      {id: 34, size: 0.04, frame_id: tag34},
+      {id: 35, size: 0.04, frame_id: tag35},
+      {id: 36, size: 0.04, frame_id: tag36},
+      {id: 37, size: 0.04, frame_id: tag37},
+      {id: 38, size: 0.04, frame_id: tag38},
+
+      ]
+    </rosparam>
+  </node>
+
+    <group if="$(arg image_view)">
+        <node name="image_view_$(arg kinect_name)" pkg="image_view" type="image_view" respawn="false" output="screen">
+            <remap from="image" to="/tag_detections_image" />
+        </node>
+    </group>
+    <node pkg="tf" type="static_transform_publisher" name="ptr_tf_node" args="0 -0.112 -0.0535 0 0 0 1 /tag19 /ptr 100" />
+
+</launch>

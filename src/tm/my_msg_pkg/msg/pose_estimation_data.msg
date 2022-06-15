@@ -1,0 +1,4 @@
+string[] Grasp_ClassList_from_pose_estimation
+int32[] Grasp_ObjectList_from_pose_estimation
+float32[] TargetPosition_above_from_pose_estimation
+float32[] TargetPosition_from_pose_estimation

@@ -1,0 +1,128 @@
+<launch>
+  
+  <node pkg="tf" type="static_transform_publisher" name="frameA" args="0.008, 0.145, 0.419, 0.012, 1.000, -0.026, 0.004 /tool0 /tag_0 100" /> 
+  
+  <node pkg="tf" type="static_transform_publisher" name="frameB" args="0.039, -0.001, 0.397, 0.013, 0.999, -0.042, 0.016 /tag_0 /camera_color_optical_frame 100" /> 
+
+  <!--node pkg="tf" type="static_transform_publisher" name="D435_extinc" args="0.015 0.000 0.000 0.504 -0.496 0.499 0.501 /camera_color_optical_frame /camera_link  100" /-->
+
+  <node pkg="tf" type="tf_echo" name="echo_tf" args="/tool0 /camera_color_optical_frame" output="screen"/> 
+
+
+</launch>
+
+
+
+<!--                   RealSense D435                          -->
+
+<!--   /tool0 to /tag_0
+At time 1572487997.099
+- Translation: [0.008, 0.145, 0.419]
+- Rotation: in Quaternion [0.012, 1.000, -0.026, 0.004]
+            in RPY (radian) [-3.089, 0.009, 3.118]
+            in RPY (degree) [-176.985, 0.502, 178.627]
+
+-->
+
+<!--   /tag_0 to /camera_color_optical_frame
+At time 1572487934.535
+- Translation: [0.039, -0.001, 0.397]
+- Rotation: in Quaternion [0.013, 0.999, -0.042, 0.016]
+            in RPY (radian) [-3.058, 0.034, 3.118]
+            in RPY (degree) [-175.186, 1.942, 178.646]
+
+-->
+
+<!--   NICE
+At time 1572488074.677
+- Translation: [-0.028, 0.124, 0.022]
+- Rotation: in Quaternion [0.016, -0.020, 0.002, 1.000]
+            in RPY (radian) [0.032, -0.040, 0.003]
+            in RPY (degree) [1.805, -2.312, 0.146]
+
+-->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!--      /ensenso    /tag_0
+At time 1563163423.498
+- Translation: [-0.038, -0.422, 1.171]
+- Rotation: in Quaternion [1.000, -0.009, -0.007, 0.007]
+            in RPY (radian) [3.127, 0.014, -0.019]
+            in RPY (degree) [179.184, 0.803, -1.083]
+-->
+
+
+<!--      /tag_0    /tool0
+At time 1563163463.508
+- Translation: [-0.027, 0.143, 0.386]
+- Rotation: in Quaternion [1.000, -0.003, -0.002, -0.003]
+            in RPY (radian) [-3.136, 0.004, -0.006]
+            in RPY (degree) [-179.702, 0.230, -0.352]
+
+-->
+
+
+<!--      /ensenso    /tool0
+At time 1563163556.463
+- Translation: [-0.073, -0.570, 0.787]
+- Rotation: in Quaternion [-0.004, 0.005, -0.006, 1.000]
+            in RPY (radian) [-0.008, 0.010, -0.012]
+            in RPY (degree) [-0.461, 0.569, -0.691]
+-->
+
+
+
+<!--================================================================-->
+
+
+
+
+
+
+
+<!--                   KinectV2                           -->
+
+
+<!-- /base_link to /tag_0
+
+- Translation: [0.398, -0.145, 0.023]
+- Rotation: in Quaternion [0.001, 0.009, -0.674, 0.739]
+            in RPY (radian) [-0.011, 0.015, -1.480]
+            in RPY (degree) [-0.632, 0.872, -84.776]
+
+
+-->
+
+<!-- /tag_0 to /kinectV2_1_link
+- Translation: [1.129, 0.580, 0.714]
+- Rotation: in Quaternion [0.517, 0.565, -0.482, -0.426]
+            in RPY (radian) [-1.744, 0.016, 1.673]
+            in RPY (degree) [-99.898, 0.919, 95.881]
+
+
+
+- Translation: [1.088, -1.226, 0.714]
+- Rotation: in Quaternion [-0.758, -0.066, 0.073, 0.645]
+            in RPY (radian) [-1.729, 0.026, 0.195]
+            in RPY (degree) [-99.046, 1.495, 11.186]
+
+
+
+
+
+-->
+
+
