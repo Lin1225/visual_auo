@@ -60,8 +60,8 @@ rosrun tf static_transform_publisher x y z rx ry rz w /flange_link /camera_base 
 #### modify hand eye transform in estimation python code
 ##### Use rviz to check the transform
 - 在rviz內,將fixed frame改成手臂法蘭面的tf
-- 點開rgb_camera_link的tf 
-- 將position和orientation輸入至`4.with_ICP/pcicp_class.py`的第96行`(end_2_rgb_t)`和第97行`(end_2_rgb_r)`
+- 點開camera_base的tf 
+- 將position和orientation輸入至`4.with_ICP/pcicp_class.py`的第97行`(end_2_camera_t)`和第98行`(end_2_camera_r)`
 - 完成手眼校正
 
 ### 開始執行程式
