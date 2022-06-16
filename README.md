@@ -11,7 +11,7 @@
 
 ### ros package git clone
 ```
-git clone https://github.com/Lin1225/vs_grasp.git
+git clone https://github.com/Lin1225/visual_auo.git
 ```
 
 ### camera calibration
