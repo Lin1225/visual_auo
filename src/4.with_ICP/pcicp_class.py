@@ -602,13 +602,9 @@ class detector:
                 imgD = copy.deepcopy(self.depth_image)
                 copy_robot_base2camera = np.array(self.robot_base2camera)
                 data_lock.release()
-            
-            img_d = copy.deepcopy(imgD)    
-            img_c = imgC
+             
             img = imgC.astype(np.float32)
             
-            mean = [112.985016, 93.449036, 106.11367]
-            std = [57.782948, 51.31353, 54.971416]
 
             args = self.args
             model = self.modelA
@@ -617,9 +613,9 @@ class detector:
 
             
             for j in range(3):
-                img[:, :, j] -= mean[j]
+                img[:, :, j] -= self.mean[j]
             for j in range(3):
-                img[:, :, j] /= std[j]
+                img[:, :, j] /= self.std[j]
 
             img /= 255
             img = img.transpose((2, 0, 1))
@@ -659,7 +655,7 @@ class detector:
             if obj_number==-1:
                 continue
             else:
-                testdataset = PoseDataset_semantics__('eval', num_points, False, img_c, img_d, classMap_numpy, obj_box, 0.0, True)   
+                testdataset = PoseDataset_semantics__('eval', num_points, False, imgC, imgD, classMap_numpy, obj_box, 0.0, True)   
                 points, choose, img, idx= testdataset.__getitem__(obj_number)
             
             points = points.unsqueeze(0)
