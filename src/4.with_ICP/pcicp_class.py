@@ -30,6 +30,10 @@ import torch.nn as nn
 from cnn import SegmentationModel as net
 from datasets.dataset_Class import PoseDataset as PoseDataset_semantics
 
+from datasets.dataset import PoseDataset as PoseDataset_semantics__
+from torch.autograd import Variable
+from lib.transformations import quaternion_matrix, quaternion_from_matrix
+from lib.network import PoseNet, PoseRefineNet
 
 
 lock = threading.Lock()
@@ -52,6 +56,7 @@ class detector:
         self.obj_area_thr = 1000    # segmation area threshold
         self.mean = [106.799995, 132.70851, 90.46728] # training dataset mean
         self.std = [40.902023, 33.943996, 50.586]     # training dataset std
+        self.refine_times = 5       # refine times
 
         self.modelA = net.EESPNet_Seg(args.classes, s=args.s)
         if not os.path.isfile(args.pretrained):
@@ -102,6 +107,14 @@ class detector:
         camera_2_rgbb_TF = np.r_[np.c_[np.array(camera_2_rgb_r),camera_2_rgb_t.reshape((3,1))],np.array([0,0,0,1]).reshape((1,4))]
         self.end_2_camera_TF = np.matmul(end_2_camera_TF, camera_2_rgbb_TF) # end to rgb_camera_link transform
 
+        self.estimator = PoseNet(num_points = args.num_points, num_obj = args.classes-1)
+        self.estimator.cuda()
+        self.refiner = PoseRefineNet(num_points = args.num_points, num_obj = args.classes-1)
+        self.refiner.cuda()
+        self.estimator.load_state_dict(torch.load(args.model_pose))
+        self.refiner.load_state_dict(torch.load(args.refine_model_pose))
+        self.estimator.eval()
+        self.refiner.eval()
 
         print("we have done it")
         
@@ -354,7 +367,125 @@ class detector:
         self.thread_id_list.pop(0)
         lock.release()  
         self.pub_armbase2Obj.publish(pub_data)   
+
+    def evaluateModel_densefusion(self,points, choose, img, idx,robot_base2camera,now_time_):
+        thread_id = threading.get_ident()
+        lock.acquire()
+        self.thread_id_list.append(thread_id)
+        lock.release() 
+        num_points = args.num_points
         
+        points, choose, img, idx = Variable(points).cuda(), \
+                                   Variable(choose).cuda(), \
+                                   Variable(img).cuda(), \
+                                   Variable(idx).cuda()
+
+        pred_r, pred_t, pred_c, emb = self.estimator(img, points, choose, idx)
+        pred_r = pred_r / torch.norm(pred_r, dim=2).view(1, num_points, 1)
+        pred_c = pred_c.view(1, num_points)
+        how_max, which_max = torch.max(pred_c, 1)
+        pred_t = pred_t.view(1 * num_points, 1, 3)
+        
+        my_r = pred_r[0][which_max[0]]
+        my_r=my_r.view(-1).cpu().data.numpy()
+        my_t = (points.view(1 * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
+
+        for ite in range(0, self.refine_times): # refine times
+            T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
+            my_mat = quaternion_matrix(my_r)
+            R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
+            my_mat[0:3, 3] = my_t
+
+            new_points = torch.bmm((points - T), R).contiguous()
+            pred_r, pred_t = self.refiner(new_points, emb, idx)
+            pred_r = pred_r.view(1, 1, -1)
+            pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
+            my_r_2 = pred_r.view(-1).cpu().data.numpy()
+            my_t_2 = pred_t.view(-1).cpu().data.numpy()
+            my_mat_2 = quaternion_matrix(my_r_2)
+            my_mat_2[0:3, 3] = my_t_2
+
+            my_mat_final = np.dot(my_mat, my_mat_2)
+            my_r_final = copy.deepcopy(my_mat_final)
+            my_r_final[0:3, 3] = 0
+            my_r_final = quaternion_from_matrix(my_r_final, True)
+            my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
+
+            my_r = my_r_final
+            my_t = my_t_final
+
+        my_r = quaternion_matrix(my_r)[:3, :3]
+
+        final_translation=np.r_[np.c_[my_r,my_t.reshape((3,1))],np.array([0,0,0,1]).reshape((1,4))]
+
+
+        r_f = Ra.from_matrix(final_translation[0:3,0:3])
+        r_f_q = r_f.as_quat()
+
+        t = geometry_msgs.msg.TransformStamped()
+        t.header.stamp = now_time_
+        t.header.frame_id = "rgb_camera_link"
+        t.transform.translation.x = final_translation[0][3] + self.model_center_offest # model axis to center
+        t.transform.translation.y = final_translation[1][3] + self.model_center_offest # model axis to center
+        t.transform.translation.z = final_translation[2][3] - self.model_center_offest # model axis to center
+
+        t.transform.rotation.x = r_f_q[0]
+        t.transform.rotation.y = r_f_q[1]
+        t.transform.rotation.z = r_f_q[2]
+        t.transform.rotation.w = r_f_q[3]
+        t.child_frame_id = "obj_camframe"
+        self.br.sendTransform(t)
+        
+        final_translation[0][3] = final_translation[0][3] + self.model_center_offest # model axis to center
+        final_translation[1][3] = final_translation[1][3] + self.model_center_offest # model axis to center
+        final_translation[2][3] = final_translation[2][3] - self.model_center_offest # model axis to center
+
+        camera_2_Obj_r = final_translation[0:3,0:3]
+        camera_2_Obj_t = final_translation[0:3,3]  
+        camera_2_Obj_TF = np.r_[np.c_[np.array(camera_2_Obj_r),np.array(camera_2_Obj_t).reshape(3,1)],np.array([0,0,0,1]).reshape(1,4)]
+        rabot_base2Obj = np.matmul(robot_base2camera, camera_2_Obj_TF)
+        
+        
+        r_f = Ra.from_matrix(rabot_base2Obj[0:3,0:3])
+        r_f_q = r_f.as_quat()
+        
+        
+        t = geometry_msgs.msg.TransformStamped()
+        t.header.stamp = now_time_
+        t.header.frame_id = "base"
+        t.transform.translation.x = rabot_base2Obj[0][3]
+        t.transform.translation.y = rabot_base2Obj[1][3]
+        t.transform.translation.z = rabot_base2Obj[2][3]
+
+        t.transform.rotation.x = r_f_q[0]
+        t.transform.rotation.y = r_f_q[1]
+        t.transform.rotation.z = r_f_q[2]
+        t.transform.rotation.w = r_f_q[3]
+        t.child_frame_id = "obj_link"
+        self.br.sendTransform(t)
+
+        
+        pub_data = Odometry()
+        pub_data.header.stamp=now_time_
+        pub_data.header.frame_id = "base"
+        pub_data.child_frame_id = "obj_link"
+        pub_data.pose.pose.position.x=rabot_base2Obj[0][3]
+        pub_data.pose.pose.position.y=rabot_base2Obj[1][3]
+        pub_data.pose.pose.position.z=rabot_base2Obj[2][3]
+        pub_data.pose.pose.orientation.x=r_f_q[0]
+        pub_data.pose.pose.orientation.y=r_f_q[1]
+        pub_data.pose.pose.orientation.z=r_f_q[2]
+        pub_data.pose.pose.orientation.w=r_f_q[3]
+
+         
+        while thread_id != self.thread_id_list[0]:
+            pass
+
+        lock.acquire()
+        self.thread_id_list.pop(0)
+        lock.release()  
+        self.pub_armbase2Obj.publish(pub_data)   
+     
     def go_espnet(self):
         '''
             get object pose with table z filter, get the newest rgb image, depth image and rgb image time
@@ -458,6 +589,91 @@ class detector:
             processThread = threading.Thread(target=self.evaluateModel, args=(target,copy_robot_base2camera,now_time,))
             processThread.start()
 
+    def go_densefusion(self):
+        while(not rospy.is_shutdown()):
+            if data_lock.acquire():
+                if self.start !=1:
+                    rospy.sleep(0.001)
+                    data_lock.release()
+                    continue
+                self.start = 0
+                now_time = copy.copy(self.rgb_time)
+                imgC = copy.deepcopy(self.img_)
+                imgD = copy.deepcopy(self.depth_image)
+                copy_robot_base2camera = np.array(self.robot_base2camera)
+                data_lock.release()
+            
+            img_d = copy.deepcopy(imgD)    
+            img_c = imgC
+            img = imgC.astype(np.float32)
+            
+            mean = [112.985016, 93.449036, 106.11367]
+            std = [57.782948, 51.31353, 54.971416]
+
+            args = self.args
+            model = self.modelA
+            
+            num_points = args.num_points
+
+            
+            for j in range(3):
+                img[:, :, j] -= mean[j]
+            for j in range(3):
+                img[:, :, j] /= std[j]
+
+            img /= 255
+            img = img.transpose((2, 0, 1))
+            img_tensor = torch.from_numpy(img)
+            img_tensor = torch.unsqueeze(img_tensor, 0)  # add a batch dimension
+            img_tensor = img_tensor.cuda()
+
+            img_out = model(img_tensor)
+            classMap_numpy = img_out[0].max(0)[1].byte().cpu().data.numpy()
+            
+            classMap_numpy = cv2.resize(classMap_numpy, (1280, 720), interpolation=cv2.INTER_NEAREST)
+            label_img = measure.label(classMap_numpy)
+            
+            obj_box = [None, None, None, None]
+            obj_number = -1
+            for region in measure.regionprops(label_img):
+                if region.area < 1000: 
+                    # print("too small")
+                    continue
+                else:                    
+                    ## preprocessing
+                    if obj_number == -1:
+                        obj_box = [region.bbox[0],region.bbox[1],region.bbox[2],region.bbox[3]]
+                        obj_number = classMap_numpy[region.coords[0,0],region.coords[0,1]]
+                        classMap_numpy[label_img==(label_img[region.coords[0,0],region.coords[0,1]])] = 255      
+                    else:
+                        classMap_numpy[label_img==(label_img[region.coords[0,0],region.coords[0,1]])] = 255 # suppose only one object is detected
+                        if obj_box[0] > region.bbox[0]:
+                            obj_box[0] = region.bbox[0]
+                        if obj_box[1] > region.bbox[1]:
+                            obj_box[1] = region.bbox[1]
+                        if obj_box[2] < region.bbox[2]:
+                            obj_box[2] = region.bbox[2]
+                        if obj_box[3] < region.bbox[3]:
+                            obj_box[3] = region.bbox[3]
+            
+            if obj_number==-1:
+                continue
+            else:
+                testdataset = PoseDataset_semantics__('eval', num_points, False, img_c, img_d, classMap_numpy, obj_box, 0.0, True)   
+                points, choose, img, idx= testdataset.__getitem__(obj_number)
+            
+            points = points.unsqueeze(0)
+            choose = choose.unsqueeze(0)
+            img = img.unsqueeze(0)
+
+            if len(points.size()) < 1:
+                print('NOT Pass! Lost detection!')
+                continue
+            
+            processThread = threading.Thread(target=self.evaluateModel_densefusion, args=(points, choose, img, idx,copy_robot_base2camera,now_time,))
+            
+            processThread.start()
+
 
 def thread_job():
     while(not rospy.is_shutdown()):
@@ -472,7 +688,11 @@ if __name__ == '__main__':
     parser.add_argument('--classes', default=2, type=int, help='Number of classes in the dataset. 1')
     parser.add_argument('--num_points', type=int, default = '10000',  help='number of point output form espnet + depth image')
     
-    parser.add_argument('--mode', type=str, default = 'espnet',  help='Pointcloud or espnet')
+    parser.add_argument('--model_pose', type=str, default = './model_results/pose_model.pth',  help='resume PoseNet model')
+    parser.add_argument('--refine_model_pose', type=str, default = './model_results/pose_refine_model.pth',  help='resume PoseRefineNet model')
+    
+
+    parser.add_argument('--mode', type=str, default = 'espnet',  help='Pointcloud(icp+icp), espnet(esp+icp), densefusion(esp+densefusion)')
 
     args = parser.parse_args()
     rospy.init_node('semantics', anonymous=True)
@@ -486,4 +706,6 @@ if __name__ == '__main__':
         K.go_icp()
     elif args.mode == 'espnet':
         K.go_espnet()
+    elif args.mode == 'densefusion':
+        K.go_densefusion()
         
